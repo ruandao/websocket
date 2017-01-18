@@ -33,118 +33,25 @@
     <script src="/jquery-1.11.1.js"></script>
 	<script src="/url.js"></script>
     <script>
-	 $(function(){
-	  window._var = { 
-		"TO" : $.url.param("TO") ? $.url.param("TO") : '',
-	  }
-		
-	  $("#ticket_id").val($.url.param("ticket_id"));
-	 
-	  var socket = io("ws://localhost:8080/socket.io");
-	
-	  $("#m").keyup(function(e){
-		e = e ? e : window.event;		
-		if (e.keyCode == 13 && $('#m').val() != ''){
-			socket.emit('chat', $('#m').val());
-        	$('#m').val(''); 
-		}
-	  });
-      $('#sendbtn').click(function(){
-        socket.emit('chat', $('#m').val());
-        $('#m').val(''); 
-      });
-	  $('#joinbtn').click(function(){
-
-		socket.emit("join", $('#m').val());
-		$('#m').val(''); 			
-	  });
-	  $('#leavebtn').click(function(){
-		socket.emit("leave", $('#m').val());	
-	  });
-
-
-      socket.on('chat', function(msg, uuid, nickname){
-        $('#messages').append($('<li>').text("昵称【" + nickname + "】,uuid【" + uuid + "】---发布消息: " + msg));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('levelUp', function(uuid, level, num){
-        $('#messages').append($('<li>').text("类型【晋级提醒】,uuid【" + uuid + "】" + ",等级【" + level + "】,解锁数量:" + num));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('systemBroadcast', function(msg, nickname){
-        $('#messages').append($('<li>').text("昵称【" + nickname + "】---发布公告消息: " + msg));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('jin', function(msg, nickname, uuid){
-        $('#messages').append($('<li>').text("类型【禁言系统公告】,昵称【" + nickname + "】---发布消息: " + msg + "，uuid：" + uuid));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('gift', function(msg, nickname, giftId, uuid, pic, extra, level, user_type){
-        $('#messages').append($('<li>').text("类型【礼物】,昵称【" + nickname + "】---发布消息: " + msg + "，礼物id：" + giftId + ",uuid:" + uuid + ",pic:" + pic + ",extra:" + extra + ",等级:" + level + ",用户类别:" + user_type));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('dan', function(msg, nickname, uuid, pic, extra, level, user_type){
-        $('#messages').append($('<li>').text("类型【弹幕】,昵称【" + nickname + "】---发布消息: " + msg + ",uuid:" + uuid + ",pic:" + pic + ",extra:" + extra + ",等级:" + level + ",用户类别:" + user_type));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('admin', function(msg, nickname, uuid){
-        $('#messages').append($('<li>').text("类型【设置房管】,昵称【" + nickname + "】---发布消息: " + msg + ",uuid:" + uuid));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('intoRoom', function(uuid, level, num, name, user_type){
-        $('#messages').append($('<li>').text("类型【土豪进房提醒】,uuid【" + uuid + "】" + ",等级【" + level + "】,数量【" + num + "】,称号【" + name + "】,用户类别:" + user_type));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('pIntoRoom', function(uuid, nickname, pic, extra, level, user_type){
-        $('#messages').append($('<li>').text("类型【普通人进房提醒】,uuid【" + uuid + "】" + ",昵称【" + nickname + "】,pic【" + pic + "】,level【" + level + "】,extra:" + extra + "】,用户类别:" + user_type));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-	  socket.on('roomInfo', function(live_status, total_cheers, total_earnings, onlines, hostUserNum, charm, num){
-	    $('#messages').append($('<li>').text("房间信息：状态【" + live_status + "】，喝彩【" + total_cheers + "】，收益【" + total_earnings + "】，游客人数【" + onlines + "】,在线人数【" + hostUserNum + "】,魅力值【" + charm + "】,排行【" + num + "】"));
-	    console.log($("#out_messages").scrollTop())
-	    $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('devoteUserInfo', function(pic, extra){
-        $('#messages').append($('<li>').text("头【" + pic + "】---其余: " + extra));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('follow', function(uuid, nickname, level, user_type) {
-        $('#messages').append($('<li>').text("类型【关注主播】, uuid 【" + uuid + "】" + "昵称【" + nickname+"】" + "等级【" + level+"】" + "用户类型【" + user_type +"】"));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('deliverDoor', function(uuid, nickname, user_uuid, user_nickname) {
-        $('#messages').append($('<li>').text("类型【传送门广播】, uuid 【" + uuid + "】" + "昵称【" + nickname + "】" + "用户uuid【" + user_uuid + "】" + "用户昵称【" + user_nickname + "】"));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('deliverDoorCommunity', function(type_name) {
-        $('#messages').append($('<li>').text("类型【传送门之社区广播】, uuid 【" + uuid + "】"));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('deliverDoorRedEnvelop', function(uuid, nickname, num, send_uuid) {
-        $('#messages').append($('<li>').text("类型【传送门之用户抢红包】, uuid 【" + uuid + "】" + "昵称【" + nickname + "】" + "趣豆数【" + num + "】" + "送的人uuid【" + send_uuid + "】"));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-      socket.on('live_warnning', function(uuid, title, content, time) {
-        $('#messages').append($('<li>').text("类型【警告广播】, uuid 【" + uuid + "】" + "标题【" + title + "】" + "内容【" + content + "】" + "时间【" + time + "】"));
-        $("#out_messages").scrollTop($("#out_messages").scrollTop() + 50);
-      });
-
-	});
+	 var onOpen = function() {
+                console.log("Socket opened.");
+                socket.send("Hi, Server!");
+            },
+            onClose = function() {
+                console.log("Socket closed.");
+            },
+            onMessage = function(data) {
+                console.log("We get signal:");
+                console.log(data);
+            },
+            onError = function() {
+                console.log("We got an error.");
+            },
+     socket = new WebSocket("ws://127.0.0.1:8080/websocket");
+     socket.onopen = onOpen;
+     socket.onclose = onClose;
+     socket.onerror = onError;
+     socket.onmessage = onMessage;
       
     </script>
   </body>

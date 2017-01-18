@@ -14,7 +14,7 @@ func failTheWebsocketConnection(msg string, w http.ResponseWriter, r *http.Reque
 
 func main() {
 	address := ":8080"
-	path := "/socket.io/"
+	path := "/websocket"
 
 	http.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
