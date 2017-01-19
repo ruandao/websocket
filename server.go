@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	//"time"
 )
 
 func failTheWebsocketConnection(msg string, w http.ResponseWriter, r *http.Request) {
@@ -37,14 +38,15 @@ func main() {
 		}
 		websocketKey := r.Header.Get("Sec-Websocket-Key")
 		//origin := r.Header.Get("Origin")
-		hash := sha1.New()
 		websocketAccept :=  websocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-		websocketAccept = base64.StdEncoding.EncodeToString(hash.Sum([]byte(websocketAccept)))
-		w.WriteHeader(101)
+		//hash := sha1.New()
+		hash := sha1.Sum([]byte(websocketAccept))
+		websocketAccept = base64.StdEncoding.EncodeToString(hash[:])
+
 		w.Header().Add("Upgrade", "websocket")
 		w.Header().Add("Connection", "Upgrade")
 		w.Header().Add("Sec-Websocket-Accept", websocketAccept)
-
+		w.WriteHeader(101)
 	})
 
 	http.Handle("/", http.FileServer(http.Dir("./test-client")))
