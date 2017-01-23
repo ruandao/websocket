@@ -77,7 +77,7 @@ func (pd *packetData)encode(w io.Writer) (err error) {
 		}
 	}
 	_, err = b.Write(pd.payload_data)
-	return err
+	return err 
 }
 
 func (pd *packetData)decode(r io.Reader) (err error) {
