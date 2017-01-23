@@ -8,7 +8,6 @@ import (
 	//"time"
 	"net"
 	"bufio"
-	"bytes"
 	"io"
 )
 type callback func (...string)
@@ -27,7 +26,7 @@ type packetData struct {
 	masked	bool
 	payload_len int
 	payload_len2 int64
-	mask_key string
+	mask_key [4]byte
 	payload_data []byte
 }
 
@@ -77,7 +76,7 @@ func (pd *packetData)encode(w io.Writer) (err error) {
 		}
 	}
 	_, err = b.Write(pd.payload_data)
-	return err 
+	return err
 }
 
 func (pd *packetData)decode(r io.Reader) (err error) {
@@ -122,11 +121,19 @@ func (pd *packetData)decode(r io.Reader) (err error) {
 		if err != nil {
 			return err
 		}
-		pd.mask_key = string(p)
+		pd.mask_key = p
 	}
+	// 没考虑，解码的时候，需要使用mask key
 	var p [lenp]byte
 	_, err = io.ReadFull(b, &p)
-	pd.payload_data = p[:]
+	if pd.masked {
+		for idx, data := range p {
+			pd.payload_data = append(pd.payload_data, data ^ pd.mask_key[idx % 4])
+		}
+	} else {
+		pd.payload_data = p[:]
+	}
+	return nil
 }
 
 type Conn struct {
