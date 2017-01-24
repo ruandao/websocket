@@ -80,10 +80,10 @@ func (pd *packetData)encode(w io.Writer) (err error) {
 		}
 	}()
 	// 写入 fin, rsv1 rsv2, rsv3, opcode
-	firstByte :=byte(pd.fin)	<< 7	&
-				byte(pd.rsv1)	<< 6	&
-				byte(pd.rsv2)	<< 5	&
-				byte(pd.rsv3)	<< 4	&
+	firstByte :=byte(pd.fin)	<< 7	|
+				byte(pd.rsv1)	<< 6	|
+				byte(pd.rsv2)	<< 5	|
+				byte(pd.rsv3)	<< 4	|
 				byte(pd.opcode)
 	err = b.WriteByte(firstByte)
 	if err != nil {
@@ -92,7 +92,7 @@ func (pd *packetData)encode(w io.Writer) (err error) {
 
 	// 写入 mask, payload len
 	var secondByte byte
-	secondByte = byte(pd.masked)	<< 7	&
+	secondByte = byte(pd.masked)	<< 7	|
 					byte(pd.payload_len)
 	err = b.WriteByte(secondByte)
 	if err != nil {
@@ -195,8 +195,25 @@ func (conn *Conn)On(event string, cb callback)  {
 	}
 	conn.cb[event] = cb
 }
-func (conn *Conn)Emit(event string, args ...string)  {
+func (conn *Conn)Emit(event string, args ...string) error {
+	var pd packetData
+	pd.fin = 1
+	pd.opcode = 1
+	lenp := len([]byte(event))
+	if lenp <= 125 {
+		pd.payload_len = lenp
+	} else if lenp >= 126 && lenp < 65536 {
+		pd.payload_len = 126
+		pd.payload_len2 = int64(lenp)
+	} else {
+		pd.payload_len = 127
+		pd.payload_len2 = int64(lenp)
+	}
+	pd.payload_data = []byte(event)
 
+	err := pd.encode(conn)
+	return err
+	//return nil
 }
 
 func (conn *Conn)processReceivePacket(pd *packetData) {
@@ -311,13 +328,5 @@ func handleConn(conn *Conn) {
 	//defer fmt.Printf("%s will close\n", conn.Conn.RemoteAddr())
 	fmt.Printf("%s connection established\n", conn.Conn.RemoteAddr())
 
-	conn.On("helloworld", func(content ...string) {
-
-	})
-	conn.On("xxx", func(content ...string) {
-
-	})
-	conn.On("disconnect", func(content ...string) {
-		conn.Close()
-	})
+	conn.Emit("你好世界")
 }
