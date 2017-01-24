@@ -9,6 +9,9 @@ import (
 	"net"
 	"bufio"
 	"io"
+	"strconv"
+	"encoding/binary"
+	"bytes"
 )
 type callback func (...string)
 
@@ -18,12 +21,12 @@ func failTheWebsocketConnection(msg string, w http.ResponseWriter, r *http.Reque
 }
 
 type packetData struct {
-	fin bool
-	rsv1 bool
-	rsv2 bool
-	rsv3 bool
+	fin int
+	rsv1 int
+	rsv2 int
+	rsv3 int
 	opcode int
-	masked	bool
+	masked	int
 	payload_len int
 	payload_len2 int64
 	mask_key [4]byte
@@ -57,20 +60,20 @@ func (pd *packetData)encode(w io.Writer) (err error) {
 		return err
 	}
 	if pd.payload_len == 126 {
-		bs := []byte(int(pd.payload_len2))[2:4]
+		bs := []byte(strconv.Itoa(int(pd.payload_len2)))[2:4]
 		_, err = b.Write(bs)
 		if err != nil {
 			return err
 		}
 	} else if pd.payload_len == 127 {
-		bs := []byte(pd.payload_len2)
+		bs := []byte(strconv.Itoa(int(pd.payload_len2)))
 		_, err = b.Write(bs)
 		if err != nil {
 			return err
 		}
 	}
-	if pd.masked {
-		_, err = b.Write([]byte(pd.mask_key))
+	if pd.masked == 1 {
+		_, err = b.Write(pd.mask_key[:])
 		if err != nil {
 			return err
 		}
@@ -85,48 +88,50 @@ func (pd *packetData)decode(r io.Reader) (err error) {
 	if err != nil {
 		return err
 	}
-	pd.fin = (( 1 << 7 ) & firstByte ) > 0
-	pd.rsv1 = (( 1 << 6 ) & firstByte ) > 0
-	pd.rsv2 = (( 1 << 5 ) & firstByte ) > 0
-	pd.rsv3 = (( 1 << 4 ) & firstByte ) > 0
-	pd.opcode = ( ((1 << 3) | (1 << 2) | (1 << 1) | 1) & firstByte)
+	pd.fin = int((( 1 << 7 ) & firstByte ) >> 7)
+	pd.rsv1 = int((( 1 << 6 ) & firstByte ) >> 6)
+	pd.rsv2 = int((( 1 << 5 ) & firstByte ) >> 5)
+	pd.rsv3 = int((( 1 << 4 ) & firstByte ) >> 4)
+	pd.opcode = int( ((1 << 3) | (1 << 2) | (1 << 1) | 1) & firstByte)
 	secondByte, err := b.ReadByte()
 	if err != nil {
 		return err
 	}
-	pd.masked = ( (1 << 7) & secondByte ) > 0
-	pd.payload_len = ( (1 << 6 | 1 << 5 | 1 << 4 | 1 << 3 | 1 << 2 | 1 << 1 | 1) & secondByte)
-	lenp := pd.payload_len
+	pd.masked = int(( (1 << 7) & secondByte ) >> 7)
+	pd.payload_len = int( (1 << 6 | 1 << 5 | 1 << 4 | 1 << 3 | 1 << 2 | 1 << 1 | 1) & secondByte)
+	lenp := int64(pd.payload_len)
 
 	if pd.payload_len == 126 {
 		var p [2]byte
-		_, err := io.ReadFull(b, &p)
+		_, err := io.ReadFull(b, p[:])
 		if err != nil {
 			return err
 		}
-		pd.payload_len2 = int64(p)
+		r := bytes.NewReader(p[:])
+		binary.Read(r, binary.LittleEndian, &pd.payload_len2)
 		lenp = pd.payload_len2
 	} else if pd.payload_len == 127 {
 		var p [8]byte
-		_, err := io.ReadFull(b, &p)
+		_, err := io.ReadFull(b, p[:])
 		if err != nil {
 			return err
 		}
-		pd.payload_len2 = int64(p)
+		r := bytes.NewReader(p[:])
+		binary.Read(r, binary.LittleEndian, &pd.payload_len2)
 		lenp = pd.payload_len2
 	}
-	if pd.masked {
+	if pd.masked > 0 {
 		var p [4]byte
-		_, err := io.ReadFull(b, &p)
+		_, err := io.ReadFull(b, p[:])
 		if err != nil {
 			return err
 		}
 		pd.mask_key = p
 	}
 	// 没考虑，解码的时候，需要使用mask key
-	var p [lenp]byte
-	_, err = io.ReadFull(b, &p)
-	if pd.masked {
+	p := make([]byte, lenp)
+	_, err = io.ReadFull(b, p)
+	if pd.masked > 0 {
 		for idx, data := range p {
 			pd.payload_data = append(pd.payload_data, data ^ pd.mask_key[idx % 4])
 		}
