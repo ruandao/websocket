@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"encoding/binary"
 	"bytes"
+	"sync"
+	"strings"
 )
 type callback func (...string)
 
@@ -20,17 +22,54 @@ func failTheWebsocketConnection(msg string, w http.ResponseWriter, r *http.Reque
 	fmt.Printf("xxx error %s\n", msg)
 }
 
+type opCode int
+
+func (oc opCode)String() string {
+	switch oc {
+	case 0:
+		return "ContinuationFrame"
+	case 1:
+		return "TextFrame"
+	case 2:
+		return "BinaryFrame"
+	case 3,4,5,6,7:
+		return "FurtherFrame(non-control)"
+	case 8:
+		return "ConnectionClose"
+	case 9:
+		return "Ping"
+	case 10:
+		return "Pong"
+	default:
+		return "FurtherFrame(control)"
+	}
+}
 type packetData struct {
 	fin int
 	rsv1 int
 	rsv2 int
 	rsv3 int
-	opcode int
+	opcode opCode
 	masked	int
 	payload_len int
 	payload_len2 int64
 	mask_key [4]byte
 	payload_data []byte
+}
+
+func (pd *packetData)String() string {
+	return strings.Join([]string{
+		fmt.Sprintf("fin:%v", pd.fin),
+		fmt.Sprintf("rsv1:%v", pd.rsv1),
+		fmt.Sprintf("rsv2:%v", pd.rsv2),
+		fmt.Sprintf("rsv3:%v", pd.rsv3),
+		fmt.Sprintf("opcode:%v", pd.opcode),
+		fmt.Sprintf("masked:%v", pd.masked),
+		fmt.Sprintf("payload_len:%v", pd.payload_len),
+		fmt.Sprintf("payload_len2:%v", pd.payload_len2),
+		fmt.Sprintf("mask_key:%s", string(pd.mask_key[:])),
+		fmt.Sprintf("payload_data:%v", string(pd.payload_data)),
+	},"\n")
 }
 
 func (pd *packetData)encode(w io.Writer) (err error) {
@@ -92,7 +131,7 @@ func (pd *packetData)decode(r io.Reader) (err error) {
 	pd.rsv1 = int((( 1 << 6 ) & firstByte ) >> 6)
 	pd.rsv2 = int((( 1 << 5 ) & firstByte ) >> 5)
 	pd.rsv3 = int((( 1 << 4 ) & firstByte ) >> 4)
-	pd.opcode = int( ((1 << 3) | (1 << 2) | (1 << 1) | 1) & firstByte)
+	pd.opcode = opCode( ((1 << 3) | (1 << 2) | (1 << 1) | 1) & firstByte)
 	secondByte, err := b.ReadByte()
 	if err != nil {
 		return err
@@ -144,13 +183,24 @@ func (pd *packetData)decode(r io.Reader) (err error) {
 type Conn struct {
 	net.Conn
 	rw *bufio.ReadWriter
+	cb map[string]callback
+	cbLocker sync.RWMutex
 }
 
 func (conn *Conn)On(event string, cb callback)  {
-	
+	conn.cbLocker.Lock()
+	defer conn.cbLocker.Unlock()
+	if conn.cb == nil {
+		conn.cb = make(map[string]callback)
+	}
+	conn.cb[event] = cb
 }
 func (conn *Conn)Emit(event string, args ...string)  {
 
+}
+
+func (conn *Conn)processReceivePacket(pd *packetData) {
+	fmt.Printf("read packet: \n%s\n", pd)
 }
 
 type WebSocketServer struct {
@@ -239,7 +289,20 @@ func main() {
 	fmt.Printf("websocket listen on %s\n", address)
 	for {
 		conn := ws.Accept()
+		go readLoop(conn)
 		go handleConn(conn)
+	}
+}
+
+func readLoop(conn *Conn) {
+	var err error
+	for err == nil {
+		var pd packetData
+		err = pd.decode(conn)
+		if err != nil {
+			return
+		}
+		go conn.processReceivePacket(&pd)
 	}
 }
 
