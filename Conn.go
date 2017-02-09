@@ -19,6 +19,7 @@ type Conn struct {
 	hadReceiveCloseFrame	bool
 	pingLoopChan			chan int
 	pingInterval			int
+	writeChanCloseNotify	chan int
 }
 
 type callback func(...string)
@@ -31,6 +32,7 @@ func newConn(conn net.Conn) *Conn {
 		writeChan:make(chan *PacketData),
 		pingLoopChan:make(chan int),
 		pingInterval:25,
+		writeChanCloseNotify: make(chan int),
 	}
 	go _conn.readLoop()
 	go _conn.writeLoop()
@@ -41,6 +43,7 @@ func newConn(conn net.Conn) *Conn {
 func (conn *Conn)On(event string, cb callback)  {
 	conn.cbMappingLocker.Lock()
 	defer conn.cbMappingLocker.Unlock()
+	fmt.Printf("register on %s callback: %v\n", event, cb)
 	conn.cbMapping[event] = cb
 }
 
@@ -60,6 +63,10 @@ func (conn *Conn)Close() {
 }
 func (conn *Conn)closeConn()  {
 	if conn.closeStatus == 2 {
+		close(conn.writeChanCloseNotify)
+		// 延迟300毫秒，使得不会和PingLoop发生竞争
+		//（即，保证writeChanCloseNotify成功通知）
+		<- time.After(300 * 1000 * 1000)
 		close(conn.writeChan)
 		conn.Conn.Close()
 	}
@@ -79,11 +86,12 @@ func (conn *Conn)readLoop() {
 		case ContinuationFrame:
 			pds = append(pds, &pd)
 		case TextFrame, BinaryFrame:
-			fmt.Printf("frame: %s\n", pd.String())
+			//fmt.Printf("frame: %s\n", pd.String())
 			pds = append(pds, &pd)
 			conn.processDataFrame(pds)
 			pds = []*PacketData{}
 		case CloseFrame:
+			fmt.Printf("close frame\n")
 			conn.hadReceiveCloseFrame = true
 			atomic.AddInt32(&conn.closeStatus, 1)
 			conn.closeConn()
@@ -134,21 +142,24 @@ func (conn *Conn)pingLoop() {
 			fmt.Printf("out of ping lifecycle\n")
 			conn.processError()
 			return
+		case <-conn.writeChanCloseNotify:
+			return
 		}
 
 	}
 }
 
 func (conn *Conn)processDataFrame(pds []*PacketData)  {
-	_event := string(pds[0].payload)
+	_event := string(pds[0].payload_data)
 	var args []string
 	for _, pd := range pds[1:] {
-		args = append(args, string(pd.payload))
+		args = append(args, string(pd.payload_data))
 	}
 	conn.cbMappingLocker.RLock()
 	defer conn.cbMappingLocker.RUnlock()
 
 	for event, cb := range conn.cbMapping {
+		fmt.Printf("client event: %s server event: %s equal: %v\n", _event, event, _event == event)
 		if event == _event {
 			cb(args...)
 		}
@@ -157,9 +168,11 @@ func (conn *Conn)processDataFrame(pds []*PacketData)  {
 
 func (conn *Conn)processCloseFrame()  {
 	callback, exist := conn.cbMapping["close"]
+	fmt.Printf("close callback exist: %v\n", exist)
 	if !exist {
 		return
 	}
+
 	callback()
 }
 func (conn *Conn)processError() {

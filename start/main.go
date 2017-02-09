@@ -23,6 +23,7 @@ func main() {
 	fmt.Printf("listen on %s\n", port)
 	for {
 		conn := ser.Accept()
+		fmt.Printf("will run on\n")
 		conn.On("hi", func(args ...string) {
 			fmt.Printf("你说 hi\n")
 			conn.Emit(fmt.Sprintf("你说 hi %s", args))

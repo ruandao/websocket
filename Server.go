@@ -24,6 +24,7 @@ func New(address, path string) *Server {
 	return &Server{
 		address:address,
 		path:path,
+		connChan:make(chan *Conn),
 	}
 }
 func (ser *Server)Listen() {
@@ -69,6 +70,7 @@ func (ser *Server)Listen() {
 			return
 		}
 		conn := newConn(_conn)
+		fmt.Printf("will send conn\n")
 		ser.connChan <- conn
 	})
 
@@ -78,6 +80,8 @@ func (ser *Server)Listen() {
 }
 
 func (ser *Server)Accept() *Conn {
+	fmt.Printf("wait for conn\n")
 	conn := <- ser.connChan
+	fmt.Printf("get conn \n")
 	return conn
 }
