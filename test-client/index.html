@@ -34,6 +34,7 @@
                 console.log("Socket opened.");
                 <!--socket.send("bHi, Server!", "aa", "你好,服务器!");-->
                 socket.send("Hi, Server!", "aa", "你好,服务器");
+                socket.send("hi");
             },
             onClose = function() {
                 console.log("Socket closed.");
