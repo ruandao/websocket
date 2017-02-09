@@ -113,21 +113,25 @@ func (conn *Conn)pingLoop() {
 	var lastReceivePong int
 	for {
 		select {
-		case <- time.After(time.Duration(conn.pingInterval)):
+		case <- time.After(time.Duration(conn.pingInterval) * time.Second):
+			fmt.Printf("write ping\n")
 			pd := newPingFrame()
 			conn.writeChan <- pd
 		case frameType := <- conn.pingLoopChan:
 			switch frameType {
 			case PingFrame:
 				//lastReceivePing = time.Now()
+				fmt.Printf("receive ping Frame\n")
 				pd := newPongFrame()
 				conn.writeChan <- pd
 			case PongFrame:
-				lastReceivePong = time.Now().Second()
+				fmt.Printf("receive pong Frame\n")
+				lastReceivePong = time.Now().Nanosecond()
 			}
-		case <-time.After(time.Duration(conn.pingInterval * 3 - lastReceivePong)):
+		case <-time.After(time.Duration(time.Duration(conn.pingInterval * 3) * time.Second - time.Duration(lastReceivePong))):
 			// 如果三个ping 间隔，仍然没有收到pong响应，则认为已经掉线了
 			// 报错
+			fmt.Printf("out of ping lifecycle\n")
 			conn.processError()
 			return
 		}
